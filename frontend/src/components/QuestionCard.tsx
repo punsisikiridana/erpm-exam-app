@@ -58,14 +58,22 @@ export function QuestionCard({ question, index, total, onAnswer, showCorrectness
           const tfWrongCall = showCorrectness && resultPart && value !== null && value !== resultPart.is_correct;
 
           if (question.qtype === "SBA") {
+            // Once correctness is shown, it must win outright — never mix the
+            // plain "selected" indigo style with the emerald/red correctness
+            // style on the same button, since Tailwind's class order (not
+            // priority) would decide which color silently wins.
+            let sbaClass: string;
+            if (showCorrectness) {
+              sbaClass = sbaCorrectOption
+                ? "border-emerald-500 bg-emerald-50 text-emerald-700"
+                : sbaWrongPick
+                ? "border-red-500 bg-red-50 text-red-700"
+                : "border-slate-200";
+            } else {
+              sbaClass = value === true ? "border-indigo-500 bg-indigo-50 text-indigo-700" : "border-slate-200 hover:border-indigo-300";
+            }
             return (
-              <button
-                key={i}
-                onClick={() => setPart(i, true)}
-                className={`rounded-md border px-4 py-3 text-left transition ${
-                  value === true ? "border-indigo-500 bg-indigo-50 text-indigo-700" : "border-slate-200 hover:border-indigo-300"
-                } ${sbaCorrectOption ? "border-emerald-500 bg-emerald-50" : sbaWrongPick ? "border-red-500 bg-red-50" : ""}`}
-              >
+              <button key={i} onClick={() => setPart(i, true)} className={`rounded-md border px-4 py-3 text-left transition ${sbaClass}`}>
                 <span className="mr-2 font-semibold">{String.fromCharCode(65 + i)}.</span>
                 {part.text}
               </button>
