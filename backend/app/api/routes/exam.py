@@ -7,7 +7,7 @@ from sqlmodel import Session, select
 from app.core.database import get_session
 from app.core.security import get_current_test_taker_id
 from app.core.time_utils import iso_utc
-from app.models.models import ExamAttempt, ExamAttemptQuestion, ExamTemplate, ExamTemplateRule, Topic
+from app.models.models import ExamAttempt, ExamAttemptQuestion, ExamTemplate, ExamTemplateRule, Question, Subject, Topic
 from app.schemas import AutosaveRequest, GenerateExamRequest
 from app.services.exam_generator import generate_exam
 from app.services.scoring import finalize_attempt, is_past_deadline
@@ -113,6 +113,21 @@ def _enforce_deadline(session: Session, attempt: ExamAttempt) -> ExamAttempt:
     return attempt
 
 
+def _explanation_and_notes_url(session: Session, question_id: int) -> tuple[str | None, str | None]:
+    """Looks up the live (not snapshotted — it's supplementary study content,
+    not scored) explanation and resolves the best notes.mcqmed.lk link:
+    the question's own topic if set, else its subject's."""
+    question = session.get(Question, question_id)
+    if not question:
+        return None, None
+    topic = session.get(Topic, question.topic_id)
+    notes_url = topic.notes_url if topic and topic.notes_url else None
+    if not notes_url and topic:
+        subject = session.get(Subject, topic.subject_id)
+        notes_url = subject.notes_url if subject else None
+    return question.explanation, notes_url
+
+
 @router.post("/attempts")
 def start_exam(body: GenerateExamRequest, test_taker_id: int = Depends(get_current_test_taker_id), session: Session = Depends(get_session)):
     attempt = generate_exam(session, test_taker_id, body.exam_template_id)
@@ -181,6 +196,7 @@ def get_results(attempt_id: int, test_taker_id: int = Depends(get_current_test_t
     for q in questions:
         parts = json.loads(q.parts_snapshot_json)
         given = _given_answers(q, len(parts))
+        explanation, notes_url = _explanation_and_notes_url(session, q.question_id)
         out_questions.append(
             {
                 "position": q.position,
@@ -193,6 +209,8 @@ def get_results(attempt_id: int, test_taker_id: int = Depends(get_current_test_t
                 "score_achieved": q.score_achieved,
                 "max_score": q.max_score,
                 "time_spent_seconds": q.time_spent_seconds,
+                "explanation": explanation,
+                "notes_url": notes_url,
             }
         )
     return {

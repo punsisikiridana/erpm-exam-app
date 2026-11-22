@@ -15,7 +15,14 @@ def list_subjects(session: Session = Depends(get_session)):
     result = []
     for s in subjects:
         topics = session.exec(select(Topic).where(Topic.subject_id == s.id)).all()
-        result.append({"id": s.id, "name": s.name, "topics": [{"id": t.id, "name": t.name} for t in topics]})
+        result.append(
+            {
+                "id": s.id,
+                "name": s.name,
+                "notes_url": s.notes_url,
+                "topics": [{"id": t.id, "name": t.name, "notes_url": t.notes_url} for t in topics],
+            }
+        )
     return result
 
 
@@ -24,7 +31,7 @@ def create_subject(body: SubjectCreate, session: Session = Depends(get_session))
     existing = session.exec(select(Subject).where(Subject.name == body.name)).first()
     if existing:
         raise HTTPException(status_code=409, detail="Subject already exists")
-    subject = Subject(name=body.name)
+    subject = Subject(name=body.name, notes_url=body.notes_url)
     session.add(subject)
     session.commit()
     session.refresh(subject)
@@ -37,6 +44,7 @@ def rename_subject(subject_id: int, body: SubjectCreate, session: Session = Depe
     if not subject:
         raise HTTPException(status_code=404, detail="Subject not found")
     subject.name = body.name
+    subject.notes_url = body.notes_url
     session.add(subject)
     session.commit()
     return subject
@@ -59,7 +67,7 @@ def delete_subject(subject_id: int, session: Session = Depends(get_session)):
 def create_topic(body: TopicCreate, session: Session = Depends(get_session)):
     if not session.get(Subject, body.subject_id):
         raise HTTPException(status_code=404, detail="Subject not found")
-    topic = Topic(subject_id=body.subject_id, name=body.name)
+    topic = Topic(subject_id=body.subject_id, name=body.name, notes_url=body.notes_url)
     session.add(topic)
     session.commit()
     session.refresh(topic)
@@ -73,6 +81,7 @@ def rename_topic(topic_id: int, body: TopicCreate, session: Session = Depends(ge
         raise HTTPException(status_code=404, detail="Topic not found")
     topic.name = body.name
     topic.subject_id = body.subject_id
+    topic.notes_url = body.notes_url
     session.add(topic)
     session.commit()
     return topic

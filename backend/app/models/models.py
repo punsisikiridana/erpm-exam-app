@@ -18,12 +18,14 @@ class QuestionSource(str, enum.Enum):
 class Subject(SQLModel, table=True):
     id: Optional[int] = Field(default=None, primary_key=True)
     name: str = Field(unique=True, index=True)
+    notes_url: Optional[str] = None  # fallback link to mcqmed's revision notes for this subject
 
 
 class Topic(SQLModel, table=True):
     id: Optional[int] = Field(default=None, primary_key=True)
     subject_id: int = Field(foreign_key="subject.id", index=True)
     name: str = Field(index=True)
+    notes_url: Optional[str] = None  # precise link to mcqmed's revision notes for this topic; overrides the subject's
 
 
 class Question(SQLModel, table=True):

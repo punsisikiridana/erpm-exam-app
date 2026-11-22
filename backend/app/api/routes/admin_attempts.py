@@ -12,6 +12,7 @@ from app.models.models import (
     ExamAttemptQuestion,
     ExamTemplate,
     Question,
+    Subject,
     TestTaker,
     Topic,
 )
@@ -53,16 +54,26 @@ def get_attempt_detail(attempt_id: int, session: Session = Depends(get_session))
         .order_by(ExamAttemptQuestion.position)
     ).all()
 
-    topic_names: dict[int, str] = {}
+    topic_cache: dict[int, Topic] = {}
+    subject_notes_cache: dict[int, str | None] = {}
     per_topic = defaultdict(lambda: {"score_achieved": 0, "max_score": 0, "time_spent_seconds": 0})
     questions_out = []
     for aq in aqs:
         question = session.get(Question, aq.question_id)
         topic_id = question.topic_id if question else None
-        if topic_id is not None and topic_id not in topic_names:
-            topic = session.get(Topic, topic_id)
-            topic_names[topic_id] = topic.name if topic else "?"
-        topic_name = topic_names.get(topic_id, "?")
+        topic = None
+        if topic_id is not None:
+            if topic_id not in topic_cache:
+                topic_cache[topic_id] = session.get(Topic, topic_id)
+            topic = topic_cache[topic_id]
+        topic_name = topic.name if topic else "?"
+
+        notes_url = topic.notes_url if topic and topic.notes_url else None
+        if not notes_url and topic:
+            if topic.subject_id not in subject_notes_cache:
+                subject = session.get(Subject, topic.subject_id)
+                subject_notes_cache[topic.subject_id] = subject.notes_url if subject else None
+            notes_url = subject_notes_cache[topic.subject_id]
 
         per_topic[topic_name]["max_score"] += aq.max_score
         per_topic[topic_name]["time_spent_seconds"] += aq.time_spent_seconds
@@ -85,6 +96,8 @@ def get_attempt_detail(attempt_id: int, session: Session = Depends(get_session))
                 "score_achieved": aq.score_achieved,
                 "max_score": aq.max_score,
                 "time_spent_seconds": aq.time_spent_seconds,
+                "explanation": question.explanation if question else None,
+                "notes_url": notes_url,
             }
         )
 

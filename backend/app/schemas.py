@@ -16,11 +16,13 @@ class TestTakerLoginRequest(BaseModel):
 
 class SubjectCreate(BaseModel):
     name: str
+    notes_url: Optional[str] = None
 
 
 class TopicCreate(BaseModel):
     subject_id: int
     name: str
+    notes_url: Optional[str] = None
 
 
 class QuestionPart(BaseModel):

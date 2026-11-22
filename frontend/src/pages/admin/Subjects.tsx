@@ -62,6 +62,24 @@ export function Subjects() {
     }
   }
 
+  async function saveSubjectNotesUrl(subject: Subject, notesUrl: string) {
+    try {
+      await api.put(`/admin/subjects/${subject.id}`, { name: subject.name, notes_url: notesUrl || null });
+      load();
+    } catch (err) {
+      setError(err instanceof ApiError ? err.message : "Failed to save notes link");
+    }
+  }
+
+  async function saveTopicNotesUrl(topic: { id: number; name: string }, subjectId: number, notesUrl: string) {
+    try {
+      await api.put(`/admin/topics/${topic.id}`, { subject_id: subjectId, name: topic.name, notes_url: notesUrl || null });
+      load();
+    } catch (err) {
+      setError(err instanceof ApiError ? err.message : "Failed to save notes link");
+    }
+  }
+
   return (
     <div>
       <h1 className="mb-4 text-xl font-semibold text-slate-900">Subjects & Topics</h1>
@@ -87,13 +105,36 @@ export function Subjects() {
                 Delete subject
               </button>
             </div>
+            <div className="mb-3 flex items-center gap-2">
+              <span className="text-xs text-slate-400">Fallback notes link:</span>
+              <input
+                key={`subj-notes-${s.id}-${s.notes_url ?? ""}`}
+                defaultValue={s.notes_url ?? ""}
+                onBlur={(e) => {
+                  if (e.target.value !== (s.notes_url ?? "")) saveSubjectNotesUrl(s, e.target.value);
+                }}
+                placeholder="https://notes.mcqmed.lk/..."
+                className="flex-1 rounded border border-slate-200 px-2 py-1 text-xs text-slate-600"
+              />
+            </div>
             <ul className="mb-2 flex flex-col gap-1">
               {s.topics.map((t) => (
-                <li key={t.id} className="flex items-center justify-between rounded bg-slate-50 px-3 py-1.5 text-sm">
-                  <span>{t.name}</span>
-                  <button onClick={() => deleteTopic(t.id)} className="text-xs text-red-500 hover:underline">
-                    Delete
-                  </button>
+                <li key={t.id} className="rounded bg-slate-50 px-3 py-1.5 text-sm">
+                  <div className="flex items-center justify-between">
+                    <span>{t.name}</span>
+                    <button onClick={() => deleteTopic(t.id)} className="text-xs text-red-500 hover:underline">
+                      Delete
+                    </button>
+                  </div>
+                  <input
+                    key={`topic-notes-${t.id}-${t.notes_url ?? ""}`}
+                    defaultValue={t.notes_url ?? ""}
+                    onBlur={(e) => {
+                      if (e.target.value !== (t.notes_url ?? "")) saveTopicNotesUrl(t, s.id, e.target.value);
+                    }}
+                    placeholder="https://notes.mcqmed.lk/... (overrides subject fallback)"
+                    className="mt-1 w-full rounded border border-slate-200 bg-white px-2 py-1 text-xs text-slate-600"
+                  />
                 </li>
               ))}
               {s.topics.length === 0 && <li className="text-sm text-slate-400">No topics yet</li>}

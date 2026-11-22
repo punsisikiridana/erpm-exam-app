@@ -1,3 +1,4 @@
+import ReactMarkdown from "react-markdown";
 import type { AttemptQuestion, ResultQuestion } from "../lib/api";
 
 interface Props {
@@ -80,23 +81,42 @@ export function QuestionCard({ question, index, total, onAnswer, showCorrectness
             );
           }
 
+          // Left blank: show what the correct answer actually was, in a
+          // color distinct from both the "correct call" green and "wrong
+          // call" red, so it reads as "not attempted" rather than either.
+          const tfUnanswered = showCorrectness && resultPart && value === null;
+
           return (
             <div
               key={i}
               className={`flex items-center justify-between rounded-md border px-4 py-2.5 ${
-                tfCorrectCall ? "border-emerald-400 bg-emerald-50" : tfWrongCall ? "border-red-400 bg-red-50" : "border-slate-200"
+                tfCorrectCall
+                  ? "border-emerald-400 bg-emerald-50"
+                  : tfWrongCall
+                  ? "border-red-400 bg-red-50"
+                  : tfUnanswered
+                  ? "border-amber-300 bg-amber-50"
+                  : "border-slate-200"
               }`}
             >
-              <span className="mr-4 flex-1 text-slate-800">{part.text}</span>
+              <span className="mr-4 flex-1 text-slate-800">
+                {part.text}
+                {tfUnanswered && <span className="ml-2 text-xs font-medium text-amber-600">— not answered</span>}
+              </span>
               <div className="flex gap-1.5">
                 {["True", "False"].map((label) => {
                   const asBool = label === "True";
+                  const isTheCorrectAnswer = tfUnanswered && resultPart.is_correct === asBool;
                   return (
                     <button
                       key={label}
                       onClick={() => setPart(i, asBool)}
                       className={`rounded px-3 py-1 text-sm font-medium ${
-                        value === asBool ? "bg-indigo-600 text-white" : "bg-slate-100 text-slate-600 hover:bg-slate-200"
+                        value === asBool
+                          ? "bg-indigo-600 text-white"
+                          : isTheCorrectAnswer
+                          ? "bg-amber-500 text-white"
+                          : "bg-slate-100 text-slate-600 hover:bg-slate-200"
                       }`}
                     >
                       {label}
@@ -108,6 +128,29 @@ export function QuestionCard({ question, index, total, onAnswer, showCorrectness
           );
         })}
       </div>
+
+      {showCorrectness && isResultQuestion(question) && (question.explanation || question.notes_url) && (
+        <div className="mt-4 border-t border-slate-100 pt-3">
+          {question.explanation && (
+            <details className="text-sm">
+              <summary className="cursor-pointer font-medium text-indigo-600 hover:underline">Show explanation</summary>
+              <div className="prose prose-sm prose-slate mt-2 max-w-none">
+                <ReactMarkdown>{question.explanation}</ReactMarkdown>
+              </div>
+            </details>
+          )}
+          {question.notes_url && (
+            <a
+              href={question.notes_url}
+              target="_blank"
+              rel="noopener noreferrer"
+              className="mt-2 inline-block text-sm font-medium text-indigo-600 hover:underline"
+            >
+              📖 Read the mcqmed notes for this topic
+            </a>
+          )}
+        </div>
+      )}
     </div>
   );
 }

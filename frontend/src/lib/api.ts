@@ -48,11 +48,13 @@ export type QuestionType = "TF" | "SBA";
 export interface Topic {
   id: number;
   name: string;
+  notes_url?: string | null;
 }
 
 export interface Subject {
   id: number;
   name: string;
+  notes_url?: string | null;
   topics: Topic[];
 }
 
@@ -156,4 +158,6 @@ export interface ResultQuestion {
   max_score: number;
   time_spent_seconds: number;
   topic?: string;
+  explanation: string | null;
+  notes_url: string | null;
 }
