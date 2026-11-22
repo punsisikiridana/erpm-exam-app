@@ -27,21 +27,13 @@ Medicine).
   admin panel) via an automated headless-browser run — see verification
   notes below.
 
-## What's NOT working yet
-
-**Importing questions from mcqmed.lk.** The importer (`backend/app/importer/`)
-is a scaffold only. Supabase's REST API needs a public "anon" API key plus the
-real table/column names, neither of which could be determined safely in an
-automated way (this coding session's own safety controls blocked an attempt
-to read it from mcqmed.lk's public JS bundle, treating it as out-of-scope
-access to a third party's backend). **See
-`backend/app/importer/README.md` for exactly what to do** — it's a 5-minute
-manual step (open your browser's DevTools Network tab while using mcqmed.lk)
-to unblock this.
-
-In the meantime, the admin **Questions** page fully supports adding
-questions by hand, so you can start building and running exams today without
-the importer.
+- **Importing real questions from mcqmed.lk**: working — see
+  `backend/app/importer/README.md` for the schema and how to point it at a
+  new topic. Also runnable from the admin **Questions** page's "Import from
+  mcqmed.lk" form. Real Cardiology content (246 questions) is already
+  imported; the admin **Questions** page also supports adding questions by
+  hand for subjects mcqmed doesn't have (Community Medicine, Forensic
+  Medicine).
 
 ## Running it locally
 
@@ -67,10 +59,30 @@ http://127.0.0.1:5180/exam/login (test-taker).
 
 ## Deploying
 
-`render.yaml` deploys this as a single Render Web Service (FastAPI serves the
-built frontend as static files, SQLite file on a persistent disk). Set the
-`sync: false` env vars (`ADMIN_PASSWORD_HASH`, mcqmed credentials once you
-have them) in Render's dashboard — never commit real values.
+**Primary: this VPS, as a systemd service** (`deploy/erpm-exam.service`) —
+chosen over a PaaS specifically because its free tier wipes local disk on
+every deploy, which would lose the SQLite database (questions, attempts,
+everything) each time. On a VPS you already control, the DB just lives on
+real disk permanently.
+
+```bash
+cd frontend && npm run build                  # builds dist/, served by FastAPI
+cp deploy/erpm-exam.service /etc/systemd/system/
+systemctl daemon-reload
+systemctl enable --now erpm-exam.service
+ufw allow 8020/tcp                            # or proxy it through nginx/TLS instead
+```
+
+It's currently reachable at `http://72.61.240.223:8020` — **plain HTTP, not
+HTTPS**, since Let's Encrypt can't issue a certificate for a bare IP. Logins
+(admin password, test-taker passcode) travel unencrypted. That's an
+acceptable tradeoff for a temporary tool for one friend, but if this needs
+to stick around, put it behind an nginx server block + a subdomain +
+certbot (same pattern as this VPS's other sites) for real TLS.
+
+`render.yaml` is kept as an alternative if you'd rather not self-host —
+same app, but re-seed subjects/topics/templates/questions after every
+deploy since Render's free tier has no persistent disk.
 
 ## Security notes
 
