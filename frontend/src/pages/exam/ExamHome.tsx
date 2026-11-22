@@ -95,7 +95,7 @@ export function ExamHome() {
                   onClick={() => navigate(`/exam/attempts/${a.id}/results`)}
                   className="rounded-md border border-slate-200 bg-white px-4 py-3 text-left hover:border-indigo-300"
                 >
-                  {a.template_name} — {a.score}/{a.total_questions} — {new Date(a.submitted_at!).toLocaleString()}
+                  {a.template_name} — {a.score}/{a.total_marks} — {new Date(a.submitted_at!).toLocaleString()}
                 </button>
               ))}
           </div>

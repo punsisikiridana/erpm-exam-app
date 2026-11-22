@@ -1,3 +1,4 @@
+import json
 import random
 from datetime import datetime
 
@@ -83,11 +84,17 @@ def generate_exam(session: Session, test_taker_id: int, exam_template_id: int) -
     }
     had_repeats = any(q.id in seen_ids_before for q in all_selected)
 
+    total_marks = 0
+    for question in all_selected:
+        parts = json.loads(question.parts_json)
+        total_marks += 1 if question.qtype == QuestionType.SBA else len(parts)
+
     attempt = ExamAttempt(
         test_taker_id=test_taker_id,
         exam_template_id=exam_template_id,
         time_limit_minutes_snapshot=template.time_limit_minutes,
         total_questions=len(all_selected),
+        total_marks=total_marks,
         had_repeats=had_repeats,
     )
     session.add(attempt)
@@ -96,6 +103,8 @@ def generate_exam(session: Session, test_taker_id: int, exam_template_id: int) -
 
     now = datetime.utcnow()
     for position, question in enumerate(all_selected):
+        parts = json.loads(question.parts_json)
+        max_score = 1 if question.qtype == QuestionType.SBA else len(parts)
         session.add(
             ExamAttemptQuestion(
                 exam_attempt_id=attempt.id,
@@ -103,8 +112,8 @@ def generate_exam(session: Session, test_taker_id: int, exam_template_id: int) -
                 position=position,
                 qtype_snapshot=question.qtype,
                 stem_snapshot=question.stem,
-                options_snapshot_json=question.options_json,
-                correct_answer_snapshot=question.correct_answer,
+                parts_snapshot_json=question.parts_json,
+                max_score=max_score,
             )
         )
         if question.id not in seen_ids_before:

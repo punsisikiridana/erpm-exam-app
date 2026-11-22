@@ -33,6 +33,7 @@ def list_attempts(session: Session = Depends(get_session)):
             "auto_submitted": a.auto_submitted,
             "had_repeats": a.had_repeats,
             "score": a.score,
+            "total_marks": a.total_marks,
             "total_questions": a.total_questions,
         }
         for a in sorted(attempts, key=lambda x: x.started_at, reverse=True)
@@ -52,7 +53,7 @@ def get_attempt_detail(attempt_id: int, session: Session = Depends(get_session))
     ).all()
 
     topic_names: dict[int, str] = {}
-    per_topic = defaultdict(lambda: {"correct": 0, "total": 0, "time_spent_seconds": 0})
+    per_topic = defaultdict(lambda: {"score_achieved": 0, "max_score": 0, "time_spent_seconds": 0})
     questions_out = []
     for aq in aqs:
         question = session.get(Question, aq.question_id)
@@ -62,20 +63,26 @@ def get_attempt_detail(attempt_id: int, session: Session = Depends(get_session))
             topic_names[topic_id] = topic.name if topic else "?"
         topic_name = topic_names.get(topic_id, "?")
 
-        per_topic[topic_name]["total"] += 1
+        per_topic[topic_name]["max_score"] += aq.max_score
         per_topic[topic_name]["time_spent_seconds"] += aq.time_spent_seconds
-        if aq.is_correct:
-            per_topic[topic_name]["correct"] += 1
+        per_topic[topic_name]["score_achieved"] += aq.score_achieved or 0
+
+        parts = json.loads(aq.parts_snapshot_json)
+        given = json.loads(aq.given_answers_json) if aq.given_answers_json else [None] * len(parts)
+        given = given + [None] * (len(parts) - len(given))
 
         questions_out.append(
             {
                 "position": aq.position,
                 "topic": topic_name,
                 "stem": aq.stem_snapshot,
-                "options": json.loads(aq.options_snapshot_json) if aq.options_snapshot_json else None,
-                "given_answer": aq.given_answer,
-                "correct_answer": aq.correct_answer_snapshot,
-                "is_correct": aq.is_correct,
+                "qtype": aq.qtype_snapshot,
+                "parts": [
+                    {"order": p["order"], "text": p["text"], "is_correct": p["is_correct"], "given": given[i]}
+                    for i, p in enumerate(parts)
+                ],
+                "score_achieved": aq.score_achieved,
+                "max_score": aq.max_score,
                 "time_spent_seconds": aq.time_spent_seconds,
             }
         )
@@ -93,6 +100,7 @@ def get_attempt_detail(attempt_id: int, session: Session = Depends(get_session))
         "had_repeats": attempt.had_repeats,
         "time_limit_minutes": attempt.time_limit_minutes_snapshot,
         "score": attempt.score,
+        "total_marks": attempt.total_marks,
         "total_questions": attempt.total_questions,
         "per_topic_breakdown": per_topic,
         "questions": questions_out,

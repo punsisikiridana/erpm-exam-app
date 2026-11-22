@@ -27,14 +27,25 @@ class Topic(SQLModel, table=True):
 
 
 class Question(SQLModel, table=True):
+    """A question stem with one or more independently-correct "parts".
+
+    For SBA: parts_json is the list of options, exactly one with is_correct=true;
+    the test-taker picks one part.
+    For TF: parts_json is the list of statements (typically ~5), each
+    independently true or false; the test-taker judges every part, and each
+    judgment is scored separately (this matches how these exams are actually
+    marked — a 25-question T/F paper is 25 stems, not 25 marks).
+
+    Each part: {"order": int, "text": str, "is_correct": bool}
+    """
+
     __table_args__ = (UniqueConstraint("source", "source_external_id", name="uq_question_source_external_id"),)
 
     id: Optional[int] = Field(default=None, primary_key=True)
     topic_id: int = Field(foreign_key="topic.id", index=True)
     qtype: QuestionType
     stem: str
-    options_json: Optional[str] = None  # JSON list of {label, text}; null for TF
-    correct_answer: str  # "True"/"False" for TF; option label for SBA
+    parts_json: str  # JSON list of {order, text, is_correct}
     explanation: Optional[str] = None
     source: QuestionSource = QuestionSource.manual
     source_external_id: Optional[str] = Field(default=None, index=True)
@@ -72,21 +83,38 @@ class ExamAttempt(SQLModel, table=True):
     auto_submitted: bool = False
     had_repeats: bool = False
     time_limit_minutes_snapshot: int = 0
-    score: Optional[int] = None
-    total_questions: int = 0
+    score: Optional[int] = None  # marks achieved (sum of per-part scores)
+    total_marks: int = 0  # total marks available (sum of max_score across questions)
+    total_questions: int = 0  # number of question stems (not marks)
 
 
 class ExamAttemptQuestion(SQLModel, table=True):
+    """One served question within an attempt.
+
+    parts_snapshot_json freezes the question's parts (text + correct answer)
+    at serve time, so later edits/re-imports don't retroactively change a
+    past attempt's grading.
+
+    given_answers_json holds the test-taker's judgment per part:
+    - SBA: a single-element list, e.g. ["true"] for the one option they picked
+      (index into parts_snapshot matches which option), or null entries for
+      parts not picked.
+    - TF: one entry per part, each "true", "false", or null (unanswered).
+
+    score_achieved / max_score let scoring work uniformly for both types:
+    SBA has max_score 1, TF has max_score == number of parts.
+    """
+
     id: Optional[int] = Field(default=None, primary_key=True)
     exam_attempt_id: int = Field(foreign_key="examattempt.id", index=True)
     question_id: int = Field(foreign_key="question.id", index=True)
     position: int
     qtype_snapshot: QuestionType
     stem_snapshot: str
-    options_snapshot_json: Optional[str] = None
-    correct_answer_snapshot: str
-    given_answer: Optional[str] = None
-    is_correct: Optional[bool] = None
+    parts_snapshot_json: str
+    given_answers_json: Optional[str] = None
+    score_achieved: Optional[int] = None
+    max_score: int = 1
     time_spent_seconds: int = 0
     first_viewed_at: Optional[datetime] = None
     last_viewed_at: Optional[datetime] = None

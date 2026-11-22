@@ -14,26 +14,32 @@ from app.models.models import Question, QuestionType, Subject, TestTaker, Topic
 
 
 def make_tf(topic_id: int, i: int) -> Question:
-    answer = "True" if i % 2 == 0 else "False"
+    # 5 independent statements per stem, matching the real exam's T/F format
+    parts = [
+        {"order": j, "text": f"Statement {j} for T/F demo stem #{i} (topic {topic_id}).", "is_correct": bool((i + j) % 2)}
+        for j in range(1, 6)
+    ]
     return Question(
         topic_id=topic_id,
         qtype=QuestionType.TF,
-        stem=f"Demo T/F statement #{i} for topic {topic_id}.",
-        correct_answer=answer,
-        explanation=f"Demo explanation for T/F #{i}.",
+        stem=f"Demo T/F stem #{i} for topic {topic_id}:",
+        parts_json=json.dumps(parts),
+        explanation=f"Demo explanation for T/F stem #{i}.",
         source="manual",
     )
 
 
 def make_sba(topic_id: int, i: int) -> Question:
-    options = [{"label": c, "text": f"Option {c} for SBA #{i}"} for c in "ABCDE"]
-    correct = random.choice("ABCDE")
+    correct_index = random.randrange(5)
+    parts = [
+        {"order": k + 1, "text": f"Option {chr(65+k)} for SBA #{i}", "is_correct": k == correct_index}
+        for k in range(5)
+    ]
     return Question(
         topic_id=topic_id,
         qtype=QuestionType.SBA,
         stem=f"Demo SBA question #{i} for topic {topic_id}.",
-        options_json=json.dumps(options),
-        correct_answer=correct,
+        parts_json=json.dumps(parts),
         explanation=f"Demo explanation for SBA #{i}.",
         source="manual",
     )

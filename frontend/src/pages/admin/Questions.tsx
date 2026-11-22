@@ -2,7 +2,17 @@ import { useEffect, useMemo, useState } from "react";
 import { useNavigate } from "react-router-dom";
 import { api, ApiError, type Question, type QuestionType, type Subject } from "../../lib/api";
 
-const OPTION_LABELS = ["A", "B", "C", "D", "E"];
+interface PartDraft {
+  text: string;
+  is_correct: boolean;
+}
+
+function defaultParts(qtype: QuestionType): PartDraft[] {
+  if (qtype === "SBA") {
+    return Array.from({ length: 5 }, () => ({ text: "", is_correct: false }));
+  }
+  return Array.from({ length: 5 }, () => ({ text: "", is_correct: false }));
+}
 
 export function Questions() {
   const [subjects, setSubjects] = useState<Subject[]>([]);
@@ -15,8 +25,7 @@ export function Questions() {
   const [topicId, setTopicId] = useState<number | "">("");
   const [qtype, setQtype] = useState<QuestionType>("TF");
   const [stem, setStem] = useState("");
-  const [optionTexts, setOptionTexts] = useState<Record<string, string>>({});
-  const [correctAnswer, setCorrectAnswer] = useState("");
+  const [parts, setParts] = useState<PartDraft[]>(defaultParts("TF"));
   const [explanation, setExplanation] = useState("");
 
   const allTopics = useMemo(() => subjects.flatMap((s) => s.topics.map((t) => ({ ...t, subjectName: s.name }))), [subjects]);
@@ -39,6 +48,32 @@ export function Questions() {
 
   useEffect(loadQuestions, [topicFilter, search]); // eslint-disable-line react-hooks/exhaustive-deps
 
+  function changeQtype(next: QuestionType) {
+    setQtype(next);
+    setParts(defaultParts(next));
+  }
+
+  function updatePartText(i: number, text: string) {
+    setParts((prev) => prev.map((p, idx) => (idx === i ? { ...p, text } : p)));
+  }
+
+  function setPartCorrect(i: number, checked: boolean) {
+    setParts((prev) =>
+      prev.map((p, idx) => {
+        if (qtype === "SBA") return { ...p, is_correct: idx === i };
+        return idx === i ? { ...p, is_correct: checked } : p;
+      })
+    );
+  }
+
+  function addPart() {
+    setParts((prev) => [...prev, { text: "", is_correct: false }]);
+  }
+
+  function removePart(i: number) {
+    setParts((prev) => prev.filter((_, idx) => idx !== i));
+  }
+
   async function createQuestion(e: React.FormEvent) {
     e.preventDefault();
     setError(null);
@@ -46,20 +81,26 @@ export function Questions() {
       setError("Pick a topic");
       return;
     }
-    const options = qtype === "SBA" ? OPTION_LABELS.map((label) => ({ label, text: optionTexts[label] ?? "" })) : undefined;
+    const filledParts = parts.filter((p) => p.text.trim());
+    if (filledParts.length < 2) {
+      setError("Add at least 2 parts/options");
+      return;
+    }
+    if (qtype === "SBA" && filledParts.filter((p) => p.is_correct).length !== 1) {
+      setError("SBA needs exactly one correct option");
+      return;
+    }
     try {
       await api.post("/admin/questions", {
         topic_id: topicId,
         qtype,
         stem,
-        options,
-        correct_answer: correctAnswer,
+        parts: filledParts.map((p, i) => ({ order: i + 1, text: p.text, is_correct: p.is_correct })),
         explanation: explanation || null,
         source: "manual",
       });
       setStem("");
-      setOptionTexts({});
-      setCorrectAnswer("");
+      setParts(defaultParts(qtype));
       setExplanation("");
       loadQuestions();
     } catch (err) {
@@ -99,9 +140,9 @@ export function Questions() {
           <select
             className="rounded-md border border-slate-300 px-3 py-2 text-sm"
             value={qtype}
-            onChange={(e) => setQtype(e.target.value as QuestionType)}
+            onChange={(e) => changeQtype(e.target.value as QuestionType)}
           >
-            <option value="TF">True / False</option>
+            <option value="TF">True / False (multi-statement)</option>
             <option value="SBA">Single-best-answer</option>
           </select>
         </div>
@@ -112,45 +153,38 @@ export function Questions() {
           onChange={(e) => setStem(e.target.value)}
           required
         />
-        {qtype === "SBA" ? (
-          <div className="mb-3 flex flex-col gap-2">
-            {OPTION_LABELS.map((label) => (
-              <div key={label} className="flex items-center gap-2">
-                <span className="w-5 text-sm font-semibold">{label}.</span>
-                <input
-                  className="flex-1 rounded-md border border-slate-300 px-2 py-1 text-sm"
-                  value={optionTexts[label] ?? ""}
-                  onChange={(e) => setOptionTexts((prev) => ({ ...prev, [label]: e.target.value }))}
-                  placeholder={`Option ${label}`}
-                />
-              </div>
-            ))}
-            <select
-              className="rounded-md border border-slate-300 px-3 py-2 text-sm"
-              value={correctAnswer}
-              onChange={(e) => setCorrectAnswer(e.target.value)}
-              required
-            >
-              <option value="">Correct answer...</option>
-              {OPTION_LABELS.map((label) => (
-                <option key={label} value={label}>
-                  {label}
-                </option>
-              ))}
-            </select>
-          </div>
-        ) : (
-          <select
-            className="mb-3 rounded-md border border-slate-300 px-3 py-2 text-sm"
-            value={correctAnswer}
-            onChange={(e) => setCorrectAnswer(e.target.value)}
-            required
-          >
-            <option value="">Correct answer...</option>
-            <option value="True">True</option>
-            <option value="False">False</option>
-          </select>
-        )}
+        <p className="mb-1 text-xs text-slate-500">
+          {qtype === "TF"
+            ? "Each statement below is marked True or False independently (like the real exam)."
+            : "Mark exactly one option as correct."}
+        </p>
+        <div className="mb-3 flex flex-col gap-2">
+          {parts.map((part, i) => (
+            <div key={i} className="flex items-center gap-2">
+              <input
+                type={qtype === "SBA" ? "radio" : "checkbox"}
+                name="correct-part"
+                checked={part.is_correct}
+                onChange={(e) => setPartCorrect(i, e.target.checked)}
+                title={qtype === "SBA" ? "Correct option" : "True"}
+              />
+              <input
+                className="flex-1 rounded-md border border-slate-300 px-2 py-1 text-sm"
+                value={part.text}
+                onChange={(e) => updatePartText(i, e.target.value)}
+                placeholder={qtype === "SBA" ? `Option ${String.fromCharCode(65 + i)}` : `Statement ${i + 1}`}
+              />
+              {parts.length > 2 && (
+                <button type="button" onClick={() => removePart(i)} className="text-xs text-red-500 hover:underline">
+                  Remove
+                </button>
+              )}
+            </div>
+          ))}
+          <button type="button" onClick={addPart} className="self-start text-sm text-indigo-600 hover:underline">
+            + Add {qtype === "SBA" ? "option" : "statement"}
+          </button>
+        </div>
         <textarea
           className="mb-3 w-full rounded-md border border-slate-300 px-3 py-2 text-sm"
           placeholder="Explanation (optional)"
@@ -186,14 +220,21 @@ export function Questions() {
           <div key={q.id} className="rounded-lg border border-slate-200 bg-white p-3 shadow-sm">
             <div className="mb-1 flex items-center justify-between text-xs text-slate-500">
               <span>
-                {q.qtype} · <span className={q.source === "mcqmed" ? "text-indigo-600" : "text-slate-400"}>{q.source}</span>
+                {q.qtype} · {q.parts.length} parts ·{" "}
+                <span className={q.source === "mcqmed" ? "text-indigo-600" : "text-slate-400"}>{q.source}</span>
               </span>
               <button onClick={() => deleteQuestion(q.id)} className="text-red-500 hover:underline">
                 Delete
               </button>
             </div>
             <p className="text-sm text-slate-900">{q.stem}</p>
-            <p className="mt-1 text-xs text-emerald-600">Correct: {q.correct_answer}</p>
+            <ul className="mt-1 text-xs text-slate-500">
+              {q.parts.map((p, i) => (
+                <li key={i} className={p.is_correct ? "text-emerald-600" : ""}>
+                  {p.is_correct ? "✓" : "·"} {p.text}
+                </li>
+              ))}
+            </ul>
           </div>
         ))}
         {questions.length === 0 && <p className="text-sm text-slate-400">No questions found.</p>}

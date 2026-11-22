@@ -49,10 +49,18 @@ def list_my_attempts(test_taker_id: int = Depends(get_current_test_taker_id), se
             "started_at": a.started_at.isoformat(),
             "submitted_at": a.submitted_at.isoformat() if a.submitted_at else None,
             "score": a.score,
+            "total_marks": a.total_marks,
             "total_questions": a.total_questions,
         }
         for a in sorted(attempts, key=lambda x: x.started_at, reverse=True)
     ]
+
+
+def _given_answers(aq: ExamAttemptQuestion, n_parts: int) -> list:
+    if not aq.given_answers_json:
+        return [None] * n_parts
+    given = json.loads(aq.given_answers_json)
+    return given + [None] * (n_parts - len(given))
 
 
 def _serialize_attempt(session: Session, attempt: ExamAttempt) -> dict:
@@ -61,6 +69,22 @@ def _serialize_attempt(session: Session, attempt: ExamAttempt) -> dict:
         .where(ExamAttemptQuestion.exam_attempt_id == attempt.id)
         .order_by(ExamAttemptQuestion.position)
     ).all()
+    out_questions = []
+    for q in questions:
+        parts = json.loads(q.parts_snapshot_json)
+        out_questions.append(
+            {
+                "position": q.position,
+                "qtype": q.qtype_snapshot,
+                "stem": q.stem_snapshot,
+                # correctness of each part is intentionally omitted while in progress;
+                # the results endpoint includes it after submission.
+                "parts": [{"order": p["order"], "text": p["text"]} for p in parts],
+                "given_answers": _given_answers(q, len(parts)),
+                "max_score": q.max_score,
+                "time_spent_seconds": q.time_spent_seconds,
+            }
+        )
     return {
         "id": attempt.id,
         "started_at": attempt.started_at.isoformat(),
@@ -69,21 +93,9 @@ def _serialize_attempt(session: Session, attempt: ExamAttempt) -> dict:
         "had_repeats": attempt.had_repeats,
         "time_limit_minutes": attempt.time_limit_minutes_snapshot,
         "total_questions": attempt.total_questions,
+        "total_marks": attempt.total_marks,
         "score": attempt.score,
-        "questions": [
-            {
-                "position": q.position,
-                "qtype": q.qtype_snapshot,
-                "stem": q.stem_snapshot,
-                "options": json.loads(q.options_snapshot_json) if q.options_snapshot_json else None,
-                "given_answer": q.given_answer,
-                "is_correct": q.is_correct,
-                "time_spent_seconds": q.time_spent_seconds,
-                # correct_answer is intentionally omitted while the attempt is in progress;
-                # the results endpoint includes it after submission.
-            }
-            for q in questions
-        ],
+        "questions": out_questions,
     }
 
 
@@ -138,8 +150,8 @@ def autosave_answer(
     if aq.first_viewed_at is None:
         aq.first_viewed_at = now
     aq.last_viewed_at = now
-    if body.given_answer is not None:
-        aq.given_answer = body.given_answer
+    if body.given_answers is not None:
+        aq.given_answers_json = json.dumps(body.given_answers)
     aq.time_spent_seconds += max(0, body.time_spent_seconds_delta)
     session.add(aq)
     session.commit()
@@ -164,21 +176,29 @@ def get_results(attempt_id: int, test_taker_id: int = Depends(get_current_test_t
         .where(ExamAttemptQuestion.exam_attempt_id == attempt_id)
         .order_by(ExamAttemptQuestion.position)
     ).all()
+    out_questions = []
+    for q in questions:
+        parts = json.loads(q.parts_snapshot_json)
+        given = _given_answers(q, len(parts))
+        out_questions.append(
+            {
+                "position": q.position,
+                "qtype": q.qtype_snapshot,
+                "stem": q.stem_snapshot,
+                "parts": [
+                    {"order": p["order"], "text": p["text"], "is_correct": p["is_correct"], "given": given[i]}
+                    for i, p in enumerate(parts)
+                ],
+                "score_achieved": q.score_achieved,
+                "max_score": q.max_score,
+                "time_spent_seconds": q.time_spent_seconds,
+            }
+        )
     return {
         "id": attempt.id,
         "score": attempt.score,
+        "total_marks": attempt.total_marks,
         "total_questions": attempt.total_questions,
         "auto_submitted": attempt.auto_submitted,
-        "questions": [
-            {
-                "position": q.position,
-                "stem": q.stem_snapshot,
-                "options": json.loads(q.options_snapshot_json) if q.options_snapshot_json else None,
-                "given_answer": q.given_answer,
-                "correct_answer": q.correct_answer_snapshot,
-                "is_correct": q.is_correct,
-                "time_spent_seconds": q.time_spent_seconds,
-            }
-            for q in questions
-        ],
+        "questions": out_questions,
     }

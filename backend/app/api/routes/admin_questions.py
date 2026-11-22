@@ -18,8 +18,7 @@ def _serialize(q: Question) -> dict:
         "topic_id": q.topic_id,
         "qtype": q.qtype,
         "stem": q.stem,
-        "options": json.loads(q.options_json) if q.options_json else None,
-        "correct_answer": q.correct_answer,
+        "parts": json.loads(q.parts_json),
         "explanation": q.explanation,
         "source": q.source,
         "source_external_id": q.source_external_id,
@@ -44,12 +43,15 @@ def list_questions(
 
 @router.post("/questions")
 def create_question(body: QuestionCreate, session: Session = Depends(get_session)):
+    if not body.parts:
+        raise HTTPException(status_code=400, detail="At least one part is required")
+    if body.qtype == "SBA" and sum(1 for p in body.parts if p.is_correct) != 1:
+        raise HTTPException(status_code=400, detail="SBA questions need exactly one correct option")
     question = Question(
         topic_id=body.topic_id,
         qtype=body.qtype,
         stem=body.stem,
-        options_json=json.dumps([o.model_dump() for o in body.options]) if body.options else None,
-        correct_answer=body.correct_answer,
+        parts_json=json.dumps([p.model_dump() for p in body.parts]),
         explanation=body.explanation,
         source=body.source,
         source_external_id=body.source_external_id,
@@ -67,10 +69,8 @@ def update_question(question_id: int, body: QuestionUpdate, session: Session = D
         raise HTTPException(status_code=404, detail="Question not found")
     if body.stem is not None:
         question.stem = body.stem
-    if body.options is not None:
-        question.options_json = json.dumps([o.model_dump() for o in body.options])
-    if body.correct_answer is not None:
-        question.correct_answer = body.correct_answer
+    if body.parts is not None:
+        question.parts_json = json.dumps([p.model_dump() for p in body.parts])
     if body.explanation is not None:
         question.explanation = body.explanation
     session.add(question)

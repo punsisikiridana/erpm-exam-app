@@ -34,12 +34,12 @@ export function ExamRunner() {
   }, [attemptId, navigate]);
 
   const flushTime = useCallback(
-    async (position: number, givenAnswer?: string) => {
+    async (position: number, givenAnswers?: (boolean | null)[]) => {
       const elapsed = Math.round((Date.now() - viewStartedAtRef.current) / 1000);
       viewStartedAtRef.current = Date.now();
       try {
         await api.patch(`/exam/attempts/${attemptId}/questions/${position}`, {
-          given_answer: givenAnswer,
+          given_answers: givenAnswers,
           time_spent_seconds_delta: elapsed,
         });
       } catch {
@@ -58,13 +58,13 @@ export function ExamRunner() {
     [attempt, current, flushTime]
   );
 
-  function handleAnswer(answer: string) {
+  function handleAnswer(givenAnswers: (boolean | null)[]) {
     if (!attempt) return;
     setAttempt({
       ...attempt,
-      questions: attempt.questions.map((q) => (q.position === current ? { ...q, given_answer: answer } : q)),
+      questions: attempt.questions.map((q) => (q.position === current ? { ...q, given_answers: givenAnswers } : q)),
     });
-    flushTime(current, answer);
+    flushTime(current, givenAnswers);
   }
 
   const doSubmit = useCallback(async () => {
@@ -84,7 +84,7 @@ export function ExamRunner() {
 
   const deadline = new Date(attempt.started_at).getTime() + attempt.time_limit_minutes * 60 * 1000;
   const question = attempt.questions[current];
-  const answeredCount = attempt.questions.filter((q) => q.given_answer).length;
+  const answeredCount = attempt.questions.filter((q) => q.given_answers.some((a) => a !== null)).length;
   const elapsedSeconds = Math.round((Date.now() - new Date(attempt.started_at).getTime()) / 1000);
 
   return (
@@ -144,7 +144,7 @@ export function ExamRunner() {
             className={`h-8 w-8 rounded text-xs font-medium ${
               q.position === current
                 ? "bg-indigo-600 text-white"
-                : q.given_answer
+                : q.given_answers.some((a) => a !== null)
                 ? "bg-indigo-100 text-indigo-700"
                 : "bg-slate-100 text-slate-500"
             }`}

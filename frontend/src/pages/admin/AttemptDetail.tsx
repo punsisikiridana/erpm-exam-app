@@ -3,18 +3,26 @@ import { useNavigate, useParams } from "react-router-dom";
 import { api, ApiError } from "../../lib/api";
 
 interface TopicBreakdown {
-  correct: number;
-  total: number;
+  score_achieved: number;
+  max_score: number;
   time_spent_seconds: number;
+}
+
+interface DetailPart {
+  order: number;
+  text: string;
+  is_correct: boolean;
+  given: boolean | null;
 }
 
 interface DetailQuestion {
   position: number;
   topic: string;
+  qtype: "TF" | "SBA";
   stem: string;
-  given_answer: string | null;
-  correct_answer: string;
-  is_correct: boolean | null;
+  parts: DetailPart[];
+  score_achieved: number;
+  max_score: number;
   time_spent_seconds: number;
 }
 
@@ -23,6 +31,7 @@ interface Detail {
   test_taker_name: string;
   template_name: string;
   score: number;
+  total_marks: number;
   total_questions: number;
   time_limit_minutes: number;
   auto_submitted: boolean;
@@ -56,7 +65,7 @@ export function AttemptDetail() {
         {data.test_taker_name} — {data.template_name}
       </h1>
       <p className="mb-4 text-sm text-slate-500">
-        Score {data.score}/{data.total_questions} · {data.time_limit_minutes} min limit
+        Score {data.score}/{data.total_marks} ({data.total_questions} questions) · {data.time_limit_minutes} min limit
         {data.auto_submitted ? " · auto-submitted" : ""}
         {data.had_repeats ? " · had repeat questions" : ""}
       </p>
@@ -67,7 +76,7 @@ export function AttemptDetail() {
           <div key={topic} className="flex justify-between rounded bg-white px-3 py-2 text-sm shadow-sm">
             <span>{topic}</span>
             <span>
-              {b.correct}/{b.total} correct · {Math.round(b.time_spent_seconds / 60)} min spent
+              {b.score_achieved}/{b.max_score} marks · {Math.round(b.time_spent_seconds / 60)} min spent
             </span>
           </div>
         ))}
@@ -78,15 +87,22 @@ export function AttemptDetail() {
         {data.questions.map((q) => (
           <div
             key={q.position}
-            className={`rounded-lg border p-3 text-sm shadow-sm ${q.is_correct ? "border-emerald-200 bg-emerald-50" : "border-red-200 bg-red-50"}`}
+            className={`rounded-lg border p-3 text-sm shadow-sm ${
+              q.score_achieved === q.max_score ? "border-emerald-200 bg-emerald-50" : "border-red-200 bg-red-50"
+            }`}
           >
             <p className="mb-1 text-xs text-slate-500">
-              {q.topic} · {q.time_spent_seconds}s spent
+              {q.topic} · {q.score_achieved}/{q.max_score} marks · {q.time_spent_seconds}s spent
             </p>
             <p className="mb-1 text-slate-900">{q.stem}</p>
-            <p className="text-xs">
-              Given: <strong>{q.given_answer ?? "(none)"}</strong> · Correct: <strong>{q.correct_answer}</strong>
-            </p>
+            <ul className="text-xs">
+              {q.parts.map((p, i) => (
+                <li key={i} className={p.given === p.is_correct ? "text-emerald-700" : "text-red-700"}>
+                  {p.text} — correct: <strong>{String(p.is_correct)}</strong>, given:{" "}
+                  <strong>{p.given === null ? "(none)" : String(p.given)}</strong>
+                </li>
+              ))}
+            </ul>
           </div>
         ))}
       </div>

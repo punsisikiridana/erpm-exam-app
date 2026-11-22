@@ -30,7 +30,7 @@ export function Attempts() {
                 {a.test_taker_name} — {a.template_name}
               </span>
               <span className="text-sm text-slate-500">
-                {a.submitted_at ? `${a.score}/${a.total_questions}` : "In progress"}
+                {a.submitted_at ? `${a.score}/${a.total_marks}` : "In progress"}
               </span>
             </div>
             <p className="text-xs text-slate-400">

@@ -23,17 +23,17 @@ class TopicCreate(BaseModel):
     name: str
 
 
-class QuestionOption(BaseModel):
-    label: str
+class QuestionPart(BaseModel):
+    order: int
     text: str
+    is_correct: bool
 
 
 class QuestionCreate(BaseModel):
     topic_id: int
     qtype: QuestionType
     stem: str
-    options: Optional[list[QuestionOption]] = None
-    correct_answer: str
+    parts: list[QuestionPart]
     explanation: Optional[str] = None
     source: QuestionSource = QuestionSource.manual
     source_external_id: Optional[str] = None
@@ -41,8 +41,7 @@ class QuestionCreate(BaseModel):
 
 class QuestionUpdate(BaseModel):
     stem: Optional[str] = None
-    options: Optional[list[QuestionOption]] = None
-    correct_answer: Optional[str] = None
+    parts: Optional[list[QuestionPart]] = None
     explanation: Optional[str] = None
 
 
@@ -65,9 +64,14 @@ class TestTakerCreate(BaseModel):
 
 
 class AutosaveRequest(BaseModel):
-    given_answer: Optional[str] = None
+    given_answers: Optional[list[Optional[bool]]] = None  # one per part; true/false/null
     time_spent_seconds_delta: int = 0
 
 
 class GenerateExamRequest(BaseModel):
     exam_template_id: int
+
+
+class McqmedImportRequest(BaseModel):
+    local_topic_id: int
+    mcqmed_topic_id: str
