@@ -17,13 +17,16 @@ def _score_question(aq: ExamAttemptQuestion) -> int:
                 return 5 if part["is_correct"] else 0
         return 0
 
-    # TF: each part scored independently
+    # TF: each part scored independently, with negative marking —
+    # +1 correct, -1 wrong, 0 if left blank (no penalty for not answering),
+    # floored at 0 for the whole stem (never a negative question score).
     score = 0
     for i, part in enumerate(parts):
         judged = given[i] if i < len(given) else None
-        if judged is not None and judged == part["is_correct"]:
-            score += 1
-    return score
+        if judged is None:
+            continue
+        score += 1 if judged == part["is_correct"] else -1
+    return max(0, score)
 
 
 def finalize_attempt(session: Session, attempt: ExamAttempt, auto_submitted: bool) -> ExamAttempt:
