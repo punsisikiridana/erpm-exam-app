@@ -1,0 +1,25 @@
+services:
+  - type: web
+    name: erpm-exam-app
+    runtime: python
+    buildCommand: |
+      cd frontend && npm install && npm run build && cd ..
+      pip install -r backend/requirements.txt
+    startCommand: cd backend && uvicorn app.main:app --host 0.0.0.0 --port $PORT
+    envVars:
+      - key: ADMIN_PASSWORD_HASH
+        sync: false
+      - key: SESSION_SECRET
+        generateValue: true
+      - key: DATABASE_URL
+        value: sqlite:////var/data/erpm.db
+      - key: MCQMED_ACCESS_TOKEN
+        sync: false
+      - key: MCQMED_REFRESH_TOKEN
+        sync: false
+      - key: MCQMED_ANON_KEY
+        sync: false
+    disk:
+      name: erpm-data
+      mountPath: /var/data
+      sizeGB: 1
