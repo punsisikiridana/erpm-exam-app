@@ -87,7 +87,7 @@ def generate_exam(session: Session, test_taker_id: int, exam_template_id: int) -
     total_marks = 0
     for question in all_selected:
         parts = json.loads(question.parts_json)
-        total_marks += 1 if question.qtype == QuestionType.SBA else len(parts)
+        total_marks += 5 if question.qtype == QuestionType.SBA else len(parts)
 
     attempt = ExamAttempt(
         test_taker_id=test_taker_id,
@@ -104,7 +104,7 @@ def generate_exam(session: Session, test_taker_id: int, exam_template_id: int) -
     now = datetime.utcnow()
     for position, question in enumerate(all_selected):
         parts = json.loads(question.parts_json)
-        max_score = 1 if question.qtype == QuestionType.SBA else len(parts)
+        max_score = 5 if question.qtype == QuestionType.SBA else len(parts)
         session.add(
             ExamAttemptQuestion(
                 exam_attempt_id=attempt.id,

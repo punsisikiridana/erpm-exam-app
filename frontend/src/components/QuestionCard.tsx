@@ -45,8 +45,17 @@ export function QuestionCard({ question, index, total, onAnswer, showCorrectness
         {question.parts.map((part, i) => {
           const value = given[i];
           const resultPart = isResultQuestion(question) ? question.parts[i] : undefined;
-          const wrong = showCorrectness && resultPart && value !== null && value !== resultPart.is_correct;
-          const correctHighlight = showCorrectness && resultPart?.is_correct;
+
+          // SBA: always show the correct option in green (it's the answer key,
+          // regardless of what was picked), and the user's wrong pick in red.
+          const sbaCorrectOption = showCorrectness && resultPart?.is_correct;
+          const sbaWrongPick = showCorrectness && resultPart && value !== null && value !== resultPart.is_correct;
+
+          // T/F: each statement is an independent judgment, so highlight based
+          // on whether the user's True/False call matched reality — not on
+          // whether the statement itself happens to be true.
+          const tfCorrectCall = showCorrectness && resultPart && value !== null && value === resultPart.is_correct;
+          const tfWrongCall = showCorrectness && resultPart && value !== null && value !== resultPart.is_correct;
 
           if (question.qtype === "SBA") {
             return (
@@ -55,7 +64,7 @@ export function QuestionCard({ question, index, total, onAnswer, showCorrectness
                 onClick={() => setPart(i, true)}
                 className={`rounded-md border px-4 py-3 text-left transition ${
                   value === true ? "border-indigo-500 bg-indigo-50 text-indigo-700" : "border-slate-200 hover:border-indigo-300"
-                } ${correctHighlight ? "border-emerald-500 bg-emerald-50" : wrong ? "border-red-500 bg-red-50" : ""}`}
+                } ${sbaCorrectOption ? "border-emerald-500 bg-emerald-50" : sbaWrongPick ? "border-red-500 bg-red-50" : ""}`}
               >
                 <span className="mr-2 font-semibold">{String.fromCharCode(65 + i)}.</span>
                 {part.text}
@@ -67,7 +76,7 @@ export function QuestionCard({ question, index, total, onAnswer, showCorrectness
             <div
               key={i}
               className={`flex items-center justify-between rounded-md border px-4 py-2.5 ${
-                correctHighlight ? "border-emerald-400 bg-emerald-50" : wrong ? "border-red-400 bg-red-50" : "border-slate-200"
+                tfCorrectCall ? "border-emerald-400 bg-emerald-50" : tfWrongCall ? "border-red-400 bg-red-50" : "border-slate-200"
               }`}
             >
               <span className="mr-4 flex-1 text-slate-800">{part.text}</span>

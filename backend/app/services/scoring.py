@@ -11,9 +11,10 @@ def _score_question(aq: ExamAttemptQuestion) -> int:
     given = json.loads(aq.given_answers_json) if aq.given_answers_json else [None] * len(parts)
 
     if aq.qtype_snapshot == QuestionType.SBA:
+        # all-or-nothing, worth the same 5 marks as a T/F stem's 5 statements
         for i, part in enumerate(parts):
             if i < len(given) and given[i] is True:
-                return 1 if part["is_correct"] else 0
+                return 5 if part["is_correct"] else 0
         return 0
 
     # TF: each part scored independently
