@@ -116,10 +116,13 @@ def _enforce_deadline(session: Session, attempt: ExamAttempt) -> ExamAttempt:
 def _explanation_and_notes_url(session: Session, question_id: int) -> tuple[str | None, str | None]:
     """Looks up the live (not snapshotted — it's supplementary study content,
     not scored) explanation and resolves the best notes.mcqmed.lk link:
-    the question's own topic if set, else its subject's."""
+    the question's own (if a specific sub-section was matched), else its
+    topic's, else its subject's."""
     question = session.get(Question, question_id)
     if not question:
         return None, None
+    if question.notes_url:
+        return question.explanation, question.notes_url
     topic = session.get(Topic, question.topic_id)
     notes_url = topic.notes_url if topic and topic.notes_url else None
     if not notes_url and topic:

@@ -45,6 +45,7 @@ class QuestionUpdate(BaseModel):
     stem: Optional[str] = None
     parts: Optional[list[QuestionPart]] = None
     explanation: Optional[str] = None
+    notes_url: Optional[str] = None
 
 
 class ExamTemplateRuleCreate(BaseModel):

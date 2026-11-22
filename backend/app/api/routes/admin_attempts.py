@@ -68,7 +68,9 @@ def get_attempt_detail(attempt_id: int, session: Session = Depends(get_session))
             topic = topic_cache[topic_id]
         topic_name = topic.name if topic else "?"
 
-        notes_url = topic.notes_url if topic and topic.notes_url else None
+        notes_url = question.notes_url if question and question.notes_url else None
+        if not notes_url:
+            notes_url = topic.notes_url if topic and topic.notes_url else None
         if not notes_url and topic:
             if topic.subject_id not in subject_notes_cache:
                 subject = session.get(Subject, topic.subject_id)

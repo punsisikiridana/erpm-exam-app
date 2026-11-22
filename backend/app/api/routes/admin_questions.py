@@ -20,6 +20,7 @@ def _serialize(q: Question) -> dict:
         "stem": q.stem,
         "parts": json.loads(q.parts_json),
         "explanation": q.explanation,
+        "notes_url": q.notes_url,
         "source": q.source,
         "source_external_id": q.source_external_id,
     }
@@ -73,6 +74,8 @@ def update_question(question_id: int, body: QuestionUpdate, session: Session = D
         question.parts_json = json.dumps([p.model_dump() for p in body.parts])
     if body.explanation is not None:
         question.explanation = body.explanation
+    if body.notes_url is not None:
+        question.notes_url = body.notes_url
     session.add(question)
     session.commit()
     return _serialize(question)

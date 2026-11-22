@@ -49,6 +49,7 @@ class Question(SQLModel, table=True):
     stem: str
     parts_json: str  # JSON list of {order, text, is_correct}
     explanation: Optional[str] = None
+    notes_url: Optional[str] = None  # precise link to mcqmed's revision notes for this specific question; overrides topic/subject
     source: QuestionSource = QuestionSource.manual
     source_external_id: Optional[str] = Field(default=None, index=True)
     created_at: datetime = Field(default_factory=datetime.utcnow)
