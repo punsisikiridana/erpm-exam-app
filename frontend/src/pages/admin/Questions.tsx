@@ -28,6 +28,11 @@ export function Questions() {
   const [parts, setParts] = useState<PartDraft[]>(defaultParts("TF"));
   const [explanation, setExplanation] = useState("");
 
+  const [importTopicId, setImportTopicId] = useState<number | "">("");
+  const [mcqmedTopicId, setMcqmedTopicId] = useState("");
+  const [importing, setImporting] = useState(false);
+  const [importResult, setImportResult] = useState<string | null>(null);
+
   const allTopics = useMemo(() => subjects.flatMap((s) => s.topics.map((t) => ({ ...t, subjectName: s.name }))), [subjects]);
 
   function loadQuestions() {
@@ -105,6 +110,22 @@ export function Questions() {
       loadQuestions();
     } catch (err) {
       setError(err instanceof ApiError ? err.message : "Failed to create question");
+    }
+  }
+
+  async function runImport(e: React.FormEvent) {
+    e.preventDefault();
+    if (!importTopicId || !mcqmedTopicId.trim()) return;
+    setImporting(true);
+    setImportResult(null);
+    try {
+      await api.post("/admin/import/mcqmed", { local_topic_id: importTopicId, mcqmed_topic_id: mcqmedTopicId.trim() });
+      setImportResult("Import finished — refreshing question list.");
+      loadQuestions();
+    } catch (err) {
+      setImportResult(err instanceof ApiError ? `Import failed: ${err.message}` : "Import failed");
+    } finally {
+      setImporting(false);
     }
   }
 
@@ -192,6 +213,41 @@ export function Questions() {
           onChange={(e) => setExplanation(e.target.value)}
         />
         <button className="rounded-md bg-slate-900 px-4 py-2 text-sm font-medium text-white hover:bg-slate-700">Add question</button>
+      </form>
+
+      <form onSubmit={runImport} className="mb-8 rounded-lg border border-slate-200 bg-white p-4 shadow-sm">
+        <h2 className="mb-1 font-medium text-slate-800">Import from mcqmed.lk</h2>
+        <p className="mb-3 text-xs text-slate-500">
+          Needs <code>MCQMED_ACCESS_TOKEN</code>/<code>MCQMED_ANON_KEY</code> set in the server's env (see{" "}
+          <code>backend/app/importer/README.md</code>). Paste the mcqmed topic's UUID (captured from its Network tab).
+        </p>
+        <div className="flex gap-2">
+          <select
+            className="rounded-md border border-slate-300 px-3 py-2 text-sm"
+            value={importTopicId}
+            onChange={(e) => setImportTopicId(e.target.value ? Number(e.target.value) : "")}
+          >
+            <option value="">Import into topic...</option>
+            {allTopics.map((t) => (
+              <option key={t.id} value={t.id}>
+                {t.subjectName} / {t.name}
+              </option>
+            ))}
+          </select>
+          <input
+            className="flex-1 rounded-md border border-slate-300 px-2 py-1 text-sm"
+            placeholder="mcqmed topic UUID"
+            value={mcqmedTopicId}
+            onChange={(e) => setMcqmedTopicId(e.target.value)}
+          />
+          <button
+            disabled={importing}
+            className="rounded-md bg-slate-900 px-4 py-2 text-sm font-medium text-white hover:bg-slate-700 disabled:opacity-50"
+          >
+            {importing ? "Importing..." : "Import"}
+          </button>
+        </div>
+        {importResult && <p className="mt-2 text-sm text-slate-600">{importResult}</p>}
       </form>
 
       <div className="mb-3 flex gap-2">

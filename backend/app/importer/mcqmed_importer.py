@@ -1,11 +1,10 @@
 """Import questions from mcqmed.lk into the local question bank.
 
-NOT YET FUNCTIONAL — see README.md in this directory for why, and what
-you need to supply before this works. Once MCQMED_ANON_KEY is set and the
-table/column names below are corrected to match reality, this becomes a
-real one-way importer: read-only against mcqmed.lk, upserts locally.
+One-way, read-only against mcqmed.lk: fetches a single topic's questions
+(never a full-bank crawl) and upserts them locally by (source='mcqmed',
+source_external_id=<mcqmed question uuid>) — never writes back to mcqmed.
 
-Usage (once working): python -m app.importer.mcqmed_importer --topic-id 1 --mcqmed-topic-id <their-id>
+Usage: python -m app.importer.mcqmed_importer --topic-id 1 --mcqmed-topic-id <uuid>
 """
 
 import argparse
@@ -17,49 +16,48 @@ from app.core.database import engine, init_db
 from app.importer.mcqmed_client import McqmedClient
 from app.models.models import Question, QuestionType
 
-
-def _infer_qtype(row: dict) -> QuestionType:
-    # PLACEHOLDER — adjust once the real schema is known. Many MCQ banks store
-    # True/False questions with no options and SBA questions with an options array.
-    return QuestionType.SBA if row.get("options") else QuestionType.TF
+_TYPE_MAP = {"sba": QuestionType.SBA, "true_false": QuestionType.TF}
 
 
 def _map_row(row: dict, local_topic_id: int) -> Question:
-    # PLACEHOLDER field names — these are guesses and must be corrected against
-    # the real mcqmed.lk schema before this import produces sane data.
+    answers = sorted(row.get("answers", []), key=lambda a: a.get("sort_order", 0))
+    parts = [{"order": a.get("sort_order", i + 1), "text": a["body"], "is_correct": bool(a["is_correct"])} for i, a in enumerate(answers)]
     return Question(
         topic_id=local_topic_id,
-        qtype=_infer_qtype(row),
-        stem=row.get("stem") or row.get("question") or row.get("text", ""),
-        options_json=json.dumps(row["options"]) if row.get("options") else None,
-        correct_answer=str(row.get("correct_answer") or row.get("answer", "")),
+        qtype=_TYPE_MAP[row["type"]],
+        stem=row["stem"],
+        parts_json=json.dumps(parts),
         explanation=row.get("explanation"),
         source="mcqmed",
-        source_external_id=str(row.get("id")),
+        source_external_id=str(row["id"]),
     )
 
 
-def import_topic(local_topic_id: int, mcqmed_topic_id: str, table: str = "questions") -> None:
+def import_topic(local_topic_id: int, mcqmed_topic_id: str) -> None:
     client = McqmedClient()
-    rows = client.fetch_table(table, params={"select": "*", "topic_id": f"eq.{mcqmed_topic_id}"})
+
+    id_rows = client.list_topic_question_ids(mcqmed_topic_id)
+    print(f"Found {len(id_rows)} active questions in mcqmed topic {mcqmed_topic_id}.")
+    if not id_rows:
+        return
+
+    full_rows = client.get_questions([r["id"] for r in id_rows])
+    print(f"Fetched full content for {len(full_rows)} questions.")
 
     inserted = updated = skipped = 0
     with Session(engine) as session:
-        for row in rows:
+        for row in full_rows:
+            if row.get("type") not in _TYPE_MAP:
+                print(f"Skipping question {row.get('id')} with unrecognized type {row.get('type')!r}")
+                continue
             new_q = _map_row(row, local_topic_id)
             existing = session.exec(
                 select(Question).where(Question.source == "mcqmed", Question.source_external_id == new_q.source_external_id)
             ).first()
             if existing:
-                if (existing.stem, existing.options_json, existing.correct_answer, existing.explanation) != (
-                    new_q.stem,
-                    new_q.options_json,
-                    new_q.correct_answer,
-                    new_q.explanation,
-                ):
+                if (existing.stem, existing.parts_json, existing.explanation) != (new_q.stem, new_q.parts_json, new_q.explanation):
                     existing.stem = new_q.stem
-                    existing.options_json = new_q.options_json
-                    existing.correct_answer = new_q.correct_answer
+                    existing.parts_json = new_q.parts_json
                     existing.explanation = new_q.explanation
                     session.add(existing)
                     updated += 1
@@ -70,15 +68,14 @@ def import_topic(local_topic_id: int, mcqmed_topic_id: str, table: str = "questi
                 inserted += 1
         session.commit()
 
-    print(f"Done: {inserted} inserted, {updated} updated, {skipped} unchanged (out of {len(rows)} fetched).")
+    print(f"Done: {inserted} inserted, {updated} updated, {skipped} unchanged (out of {len(full_rows)} fetched).")
 
 
 if __name__ == "__main__":
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--topic-id", type=int, required=True, help="Local Topic.id to import into")
-    parser.add_argument("--mcqmed-topic-id", type=str, required=True, help="mcqmed.lk's own topic identifier")
-    parser.add_argument("--table", type=str, default="questions", help="mcqmed.lk table name (placeholder: 'questions')")
+    parser.add_argument("--mcqmed-topic-id", type=str, required=True, help="mcqmed.lk's topic UUID")
     args = parser.parse_args()
 
     init_db()
-    import_topic(args.topic_id, args.mcqmed_topic_id, args.table)
+    import_topic(args.topic_id, args.mcqmed_topic_id)

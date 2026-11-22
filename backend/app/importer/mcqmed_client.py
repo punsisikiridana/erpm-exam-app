@@ -1,15 +1,22 @@
 """Low-level HTTP client for mcqmed.lk's Supabase backend.
 
-NOT YET FUNCTIONAL. This file is a scaffold — see backend/app/importer/README.md
-for exactly what's missing and how to fill it in. In short: calling Supabase's
-REST API requires an "anon" public API key (sent as the `apikey` header)
-in addition to the user's personal access token, and the real table/column
-names aren't known yet. Both have to come from inspecting mcqmed.lk's own
-app while logged in (e.g. your browser's DevTools Network tab) — an
-automated attempt to extract this from the site was blocked by this
-session's safety controls as out-of-scope "unauthorized access" to a
-third-party backend, so it needs to be done by a human (you) and the
-values pasted into .env.
+Schema discovered by inspecting the app's own Network tab while logged in
+(the user captured this manually; no automated access to mcqmed.lk's
+internals was used):
+
+- GET  /rest/v1/questions?select=id,sort_order,type&is_active=eq.true
+       &topic_id=in.(<topic-uuid>)&order=id.asc&offset=N&limit=1000
+  -> list of {id, sort_order, type} for every active question in a topic.
+
+- POST /rest/v1/rpc/get_questions  body: {"p_ids": [<question-uuid>, ...]}
+  -> list of full question objects:
+     {id, stem, type ("sba"|"true_false"),
+      answers: [{id, body, is_correct, sort_order}, ...],
+      explanation}
+
+Both need the `apikey` header (mcqmed's public Supabase anon/publishable
+key — not secret, it ships in every visitor's browser) plus the user's own
+personal `Authorization: Bearer <access_token>`.
 """
 
 from __future__ import annotations
@@ -21,14 +28,14 @@ import httpx
 
 from app.core.config import settings
 
+_PAGE_SIZE = 50  # questions per get_questions call — keep request bodies modest
+
 
 class McqmedClient:
     def __init__(self) -> None:
         if not settings.mcqmed_anon_key:
             raise RuntimeError(
-                "MCQMED_ANON_KEY is not set. See backend/app/importer/README.md — "
-                "this key must be captured from mcqmed.lk's own app (e.g. browser DevTools), "
-                "it cannot be derived from your access token alone."
+                "MCQMED_ANON_KEY is not set. See backend/app/importer/README.md."
             )
         self._access_token = settings.mcqmed_access_token
         self._refresh_token = settings.mcqmed_refresh_token
@@ -46,39 +53,77 @@ class McqmedClient:
         resp = self._client.post(
             "/auth/v1/token",
             params={"grant_type": "refresh_token"},
-            headers={"apikey": self._anon_key},
+            headers={"apikey": self._anon_key, "Content-Type": "application/json"},
             json={"refresh_token": self._refresh_token},
         )
         if resp.status_code != 200:
             raise RuntimeError(
                 "mcqmed.lk token refresh failed — the access token has likely expired. "
-                "Log in to mcqmed.lk again in your browser and re-export a fresh token."
+                "Log in to mcqmed.lk again in your browser and re-capture a fresh token "
+                "(see backend/app/importer/README.md)."
             )
         data = resp.json()
         self._access_token = data["access_token"]
         self._refresh_token = data.get("refresh_token", self._refresh_token)
 
-    def fetch_table(self, table: str, params: dict[str, Any], retry_on_auth_failure: bool = True) -> list[dict]:
-        """GET rows from a PostgREST table endpoint, paginating via Range headers.
-
-        `table` and the shape of `params` (e.g. `topic_id=eq.<id>`, `select=...`)
-        depend on mcqmed.lk's actual schema, which is not yet known — fill this
-        in once you've captured it (see README.md in this directory).
-        """
+    def list_topic_question_ids(self, topic_id: str) -> list[dict[str, Any]]:
+        """Returns [{id, sort_order, type}, ...] for every active question in a topic."""
         rows: list[dict] = []
         offset = 0
-        page_size = 500
+        limit = 1000
         while True:
-            headers = {**self._headers(), "Range-Unit": "items", "Range": f"{offset}-{offset + page_size - 1}"}
-            resp = self._client.get(f"/rest/v1/{table}", params=params, headers=headers)
-            if resp.status_code == 401 and retry_on_auth_failure:
+            resp = self._client.get(
+                "/rest/v1/questions",
+                params={
+                    "select": "id,sort_order,type",
+                    "is_active": "eq.true",
+                    "topic_id": f"in.({topic_id})",
+                    "order": "id.asc",
+                    "offset": offset,
+                    "limit": limit,
+                },
+                headers=self._headers(),
+            )
+            if resp.status_code == 401:
                 self._refresh()
-                return self.fetch_table(table, params, retry_on_auth_failure=False)
+                resp = self._client.get(
+                    "/rest/v1/questions",
+                    params={
+                        "select": "id,sort_order,type",
+                        "is_active": "eq.true",
+                        "topic_id": f"in.({topic_id})",
+                        "order": "id.asc",
+                        "offset": offset,
+                        "limit": limit,
+                    },
+                    headers=self._headers(),
+                )
             resp.raise_for_status()
             page = resp.json()
             rows.extend(page)
-            if len(page) < page_size:
+            if len(page) < limit:
                 break
-            offset += page_size
-            time.sleep(0.3)  # be polite to a free, student-run service
+            offset += limit
         return rows
+
+    def get_questions(self, ids: list[str]) -> list[dict[str, Any]]:
+        """Bulk-fetch full question content for a list of question ids, paginated."""
+        out: list[dict] = []
+        for i in range(0, len(ids), _PAGE_SIZE):
+            chunk = ids[i : i + _PAGE_SIZE]
+            resp = self._client.post(
+                "/rest/v1/rpc/get_questions",
+                headers={**self._headers(), "Content-Type": "application/json"},
+                json={"p_ids": chunk},
+            )
+            if resp.status_code == 401:
+                self._refresh()
+                resp = self._client.post(
+                    "/rest/v1/rpc/get_questions",
+                    headers={**self._headers(), "Content-Type": "application/json"},
+                    json={"p_ids": chunk},
+                )
+            resp.raise_for_status()
+            out.extend(resp.json())
+            time.sleep(0.3)  # be polite to a free, student-run service
+        return out

@@ -6,6 +6,7 @@ from fastapi.staticfiles import StaticFiles
 
 from app.api.routes import (
     admin_attempts,
+    admin_import,
     admin_questions,
     admin_subjects,
     admin_templates,
@@ -23,6 +24,7 @@ app.include_router(admin_questions.router)
 app.include_router(admin_templates.router)
 app.include_router(admin_testtakers.router)
 app.include_router(admin_attempts.router)
+app.include_router(admin_import.router)
 app.include_router(exam.router)
 
 
