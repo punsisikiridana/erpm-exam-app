@@ -6,6 +6,7 @@ from sqlmodel import Session, select
 
 from app.core.database import get_session
 from app.core.security import get_current_test_taker_id
+from app.core.time_utils import iso_utc
 from app.models.models import ExamAttempt, ExamAttemptQuestion, ExamTemplate, ExamTemplateRule, Topic
 from app.schemas import AutosaveRequest, GenerateExamRequest
 from app.services.exam_generator import generate_exam
@@ -46,8 +47,8 @@ def list_my_attempts(test_taker_id: int = Depends(get_current_test_taker_id), se
         {
             "id": a.id,
             "template_name": templates.get(a.exam_template_id, "?"),
-            "started_at": a.started_at.isoformat(),
-            "submitted_at": a.submitted_at.isoformat() if a.submitted_at else None,
+            "started_at": iso_utc(a.started_at),
+            "submitted_at": iso_utc(a.submitted_at),
             "score": a.score,
             "total_marks": a.total_marks,
             "total_questions": a.total_questions,
@@ -87,8 +88,8 @@ def _serialize_attempt(session: Session, attempt: ExamAttempt) -> dict:
         )
     return {
         "id": attempt.id,
-        "started_at": attempt.started_at.isoformat(),
-        "submitted_at": attempt.submitted_at.isoformat() if attempt.submitted_at else None,
+        "started_at": iso_utc(attempt.started_at),
+        "submitted_at": iso_utc(attempt.submitted_at),
         "auto_submitted": attempt.auto_submitted,
         "had_repeats": attempt.had_repeats,
         "time_limit_minutes": attempt.time_limit_minutes_snapshot,

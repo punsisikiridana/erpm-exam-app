@@ -6,6 +6,7 @@ from sqlmodel import Session, select
 
 from app.core.database import get_session
 from app.core.security import require_admin
+from app.core.time_utils import iso_utc
 from app.models.models import (
     ExamAttempt,
     ExamAttemptQuestion,
@@ -28,8 +29,8 @@ def list_attempts(session: Session = Depends(get_session)):
             "id": a.id,
             "test_taker_name": takers.get(a.test_taker_id, "?"),
             "template_name": templates.get(a.exam_template_id, "?"),
-            "started_at": a.started_at.isoformat(),
-            "submitted_at": a.submitted_at.isoformat() if a.submitted_at else None,
+            "started_at": iso_utc(a.started_at),
+            "submitted_at": iso_utc(a.submitted_at),
             "auto_submitted": a.auto_submitted,
             "had_repeats": a.had_repeats,
             "score": a.score,
@@ -94,8 +95,8 @@ def get_attempt_detail(attempt_id: int, session: Session = Depends(get_session))
         "id": attempt.id,
         "test_taker_name": taker.name if taker else "?",
         "template_name": template.name if template else "?",
-        "started_at": attempt.started_at.isoformat(),
-        "submitted_at": attempt.submitted_at.isoformat() if attempt.submitted_at else None,
+        "started_at": iso_utc(attempt.started_at),
+        "submitted_at": iso_utc(attempt.submitted_at),
         "auto_submitted": attempt.auto_submitted,
         "had_repeats": attempt.had_repeats,
         "time_limit_minutes": attempt.time_limit_minutes_snapshot,
